@@ -29,10 +29,14 @@ object RecommendationSystem {
     // book schema
     val bookSchema = StructType(
       StructField("ISBN", StringType, nullable = true) ::
-        StructField("Title", StringType, nullable = true) ::
-        StructField("Author", StringType, nullable = true) ::
-        StructField("Year", IntegerType, nullable = true) ::
+        StructField("Book-Title", StringType, nullable = true) ::
+        StructField("Book-Author", StringType, nullable = true) ::
+        StructField("Year-Of-Publication", IntegerType, nullable = true) ::
         StructField("Publisher", StringType, nullable = true) ::
+        StructField("Image-URL-S", StringType, nullable = true) ::
+        StructField("Image-URL-M", StringType, nullable = true) ::
+        StructField("Image-URL-L", StringType, nullable = true) ::
+
         Nil
     )
 
@@ -40,7 +44,7 @@ object RecommendationSystem {
     val ratingSchema = StructType(
       StructField("USER-ID", IntegerType, nullable = true) ::
         StructField("ISBN", IntegerType, nullable = true) ::
-        StructField("Rating", IntegerType, nullable = true) ::
+        StructField("Book-Rating", IntegerType, nullable = true) ::
         Nil
     )
 
@@ -50,7 +54,7 @@ object RecommendationSystem {
       .option("delimiter", ";")
       .option("mode", "DROPMALFORMED")
       .schema(bookSchema)
-      .load(RecommendationSystem.getClass.getResource("/dataset/Books.csv").getPath)
+      .load(RecommendationSystem.getClass.getResource("/books_data/Books.csv").getPath)
       .cache()
       .as("books")
     bookDf.printSchema()
@@ -62,7 +66,7 @@ object RecommendationSystem {
       .option("delimiter", ";")
       .option("mode", "DROPMALFORMED")
       .schema(ratingSchema)
-      .load(RecommendationSystem.getClass.getResource("/dataset/Ratings.csv").getPath)
+      .load(RecommendationSystem.getClass.getResource("/books_data/Ratings.csv").getPath)
       .cache()
       .as("ratings")
     ratingDf.printSchema()
@@ -72,12 +76,15 @@ object RecommendationSystem {
     val jdf = ratingDf.join(bookDf, $"ratings.ISBN" === $"books.ISBN")
       .select(
         $"ratings.USER-ID".as("userId"),
-        $"ratings.Rating".as("rating"),
+        $"ratings.Book-Rating".as("rating"),
         $"ratings.ISBN".as("isbn"),
-        $"books.Title".as("title"),
-        $"books.Author".as("author"),
-        $"books.Year".as("year"),
-        $"books.Publisher".as("publisher")
+        $"books.Book-Title".as("title"),
+        $"books.Book-Author".as("author"),
+        $"books.Year-Of-Publication".as("year"),
+        $"books.Publisher".as("publisher"),
+        $"books.Image-URL-S".as("Image-URL-S"),
+        $"books.Image-URL-M".as("Image-URL-M"),
+        $"books.Image-URL-L".as("Image-URL-L")
       )
     jdf.printSchema()
     jdf.show(10)
@@ -119,20 +126,24 @@ object RecommendationSystem {
 
             val recommendedBooks = userRecommendations
               .join(bookDf, userRecommendations("recommendedBook") === bookDf("ISBN"))
-              .select($"userId", $"recommendedBook", $"Title", $"Author", $"Year", $"Publisher")
+              .select($"userId", $"recommendedBook", $"Book-Title", $"Book-Author", $"Year-Of-Publication", $"Publisher", $"Image-URL-S", $"Image-URL-M", $"Image-URL-L" )
               .limit(10)
               .collect()
 
-            val tableHeaders = Seq("User ID", "Recommended Book", "Title", "Author", "Year", "Publisher")
+            val tableHeaders = Seq("User ID", "Recommended Book", "Book-Title", "Book-Author", "Year-Of-Publication", "Publisher", "Image-URL-S", "Image-URL-M", "Image-URL-L")
 
             val tableRows = recommendedBooks.map { row =>
               val rowData = Seq(
                 row.getAs[Int]("userId").toString,
                 row.getAs[Int]("recommendedBook").toString,
-                row.getAs[String]("Title"),
-                row.getAs[String]("Author"),
-                row.getAs[Int]("Year").toString,
-                row.getAs[String]("Publisher")
+                row.getAs[String]("Book-Title"),
+                row.getAs[String]("Book-Author"),
+                row.getAs[Int]("Year-Of-Publication").toString,
+                row.getAs[String]("Publisher"),
+                row.getAs[String]("Image-URL-S"),
+                row.getAs[String]("Image-URL-S"),
+                row.getAs[String]("Image-URL-S"),
+
               )
               s"<tr>${rowData.map(data => s"<td>$data</td>").mkString}</tr>"
             }.mkString
@@ -157,7 +168,7 @@ object RecommendationSystem {
             val userRatings = jdf.filter($"userId" === userId)
             val userHighestRatedBooks = userRatings.sort($"rating".desc).limit(10)
 
-            val tableHeaders = Seq("User ID", "Book ID", "Title", "Author", "Year", "Publisher")
+            val tableHeaders = Seq("User ID", "Recommended Book", "Book-Title", "Book-Author", "Year-Of-Publication", "Publisher", "Image-URL-S", "Image-URL-M", "Image-URL-L")
 
             val tableRows = userHighestRatedBooks.collect().map { row =>
               val rowData = Seq(
@@ -166,7 +177,10 @@ object RecommendationSystem {
                 row.getAs[String]("title"),
                 row.getAs[String]("author"),
                 row.getAs[Int]("year").toString,
-                row.getAs[String]("publisher")
+                row.getAs[String]("publisher"),
+                row.getAs[String]("Image-URL-S"),
+                row.getAs[String]("Image-URL-S"),
+                row.getAs[String]("Image-URL-S"),
               )
               s"<tr>${rowData.map(data => s"<td>$data</td>").mkString}</tr>"
             }.mkString
