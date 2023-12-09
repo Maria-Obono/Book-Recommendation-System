@@ -7,8 +7,6 @@ object RecommendationSystem extends AkkaHttpServer with DataProcessingAndTrainin
 
   case class BookData(ISBN: String, title: String, author: String, year: Int, publisher: String, urlS: String, urlM: String, urlL: String)
 
-  case class RatingData(userId: Int, ISBN: Int, rating: Int)
-
   case class Recommendation(userId: Int, recommendedBook: Int)
 
   implicit val system: ActorSystem = ActorSystem("RecommendationSystem")
@@ -22,14 +20,13 @@ object RecommendationSystem extends AkkaHttpServer with DataProcessingAndTrainin
       .master("local[*]")
       .getOrCreate()
 
-//    import spark.implicits._
 
-    val (bookDf, ratingDf, jdf) = readAndJoinData(spark)
+    val (bookDf, jdf) = readAndJoinData(spark)
     val Array(trainingData, testData) = splitData(jdf)
     val alsModel = trainALSModel(trainingData)
     evaluateALSModel(alsModel, testData)
 
-    val route = createAkkaHttpRoute(alsModel, bookDf, spark)
+    val route = createAkkaHttpRoute(alsModel, (bookDf, jdf), spark)
     startAkkaHttpServer(route, system)
 
     spark.stop()

@@ -4,7 +4,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import RecommendationSystem._
 trait DataProcessingAndTraining {
-  def readAndJoinData(spark: SparkSession): (DataFrame, DataFrame, DataFrame) = {
+  def readAndJoinData(spark: SparkSession): (DataFrame, DataFrame) = {
     val bookSchema = StructType(
       StructField("ISBN", StringType, nullable = true) ::
         StructField("Book-Title", StringType, nullable = true) ::
@@ -41,10 +41,8 @@ trait DataProcessingAndTraining {
         $"books.Image-URL-S".as("urlS"),
         $"books.Image-URL-M".as("urlM"),
         $"books.Image-URL-L".as("urlL")
-      ).as[BookData].toDF()
-    jdf.show()
-    jdf.printSchema()
-    (bookDf, ratingDf, jdf)
+      ).toDF()
+    (bookDf, jdf)
   }
 
 
