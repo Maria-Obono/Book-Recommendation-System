@@ -90,8 +90,8 @@ trait AkkaHttpServer {
     implicit val system: ActorSystem = ActorSystem("RecommendationSystem")
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
-    val bindingFuture = Http().bindAndHandle(route, "localhost", 8088)
-    println(s"Server online at http://localhost:8088/\nPress RETURN to stop...")
+    val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
+    println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
     scala.io.StdIn.readLine()
     bindingFuture
       .flatMap(_.unbind())
