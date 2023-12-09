@@ -59,4 +59,6 @@ This Api will fetch top 10 Highly rated books for the given userId
 ### Sample Requests
 APIs will fetch the recommended books as html table
 - ```GET http://localhost:8088/recommendations/user/11944```
-- ```GET http://localhost:8088/recommendations/userchoice/277378```
+  ![Screenshot 1](response-screenshots/user.png)
+- ```GET http://localhost:8088/recommendations/userchoice/11944```
+  ![Screenshot 2](response-screenshots/userchoice.png)
