@@ -10,7 +10,6 @@ import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.sql.types.{StructType, StructField, StringType, IntegerType}
 
-
 object RecommendationSystem {
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem = ActorSystem("RecommendationSystem")
@@ -23,10 +22,10 @@ object RecommendationSystem {
       .master("local[*]") // Use local mode; adjust according to your cluster setup
       .getOrCreate()
 
-    // SparkSession has implicits
+    // Import Spark implicits
     import spark.implicits._
 
-    // book schema
+    // Define book schema
     val bookSchema = StructType(
       StructField("ISBN", StringType, nullable = true) ::
         StructField("Book-Title", StringType, nullable = true) ::
@@ -36,11 +35,10 @@ object RecommendationSystem {
         StructField("Image-URL-S", StringType, nullable = true) ::
         StructField("Image-URL-M", StringType, nullable = true) ::
         StructField("Image-URL-L", StringType, nullable = true) ::
-
         Nil
     )
 
-    // rating schema
+    // Define rating schema
     val ratingSchema = StructType(
       StructField("USER-ID", IntegerType, nullable = true) ::
         StructField("ISBN", IntegerType, nullable = true) ::
@@ -48,7 +46,7 @@ object RecommendationSystem {
         Nil
     )
 
-    // read books
+    // Read books data
     val bookDf = spark.read.format("csv")
       .option("header", value = true)
       .option("delimiter", ";")
@@ -57,10 +55,12 @@ object RecommendationSystem {
       .load(RecommendationSystem.getClass.getResource("/books_data/Books.csv").getPath)
       .cache()
       .as("books")
+
+    // Display books schema and sample data
     bookDf.printSchema()
     bookDf.show(10)
 
-    // read ratings
+    // Read ratings data
     val ratingDf = spark.read.format("csv")
       .option("header", value = true)
       .option("delimiter", ";")
@@ -69,10 +69,12 @@ object RecommendationSystem {
       .load(RecommendationSystem.getClass.getResource("/books_data/Ratings.csv").getPath)
       .cache()
       .as("ratings")
+
+    // Display ratings schema and sample data
     ratingDf.printSchema()
     ratingDf.show(10)
 
-    // join dfs
+    // Join dataframes
     val jdf = ratingDf.join(bookDf, $"ratings.ISBN" === $"books.ISBN")
       .select(
         $"ratings.USER-ID".as("userId"),
@@ -86,14 +88,15 @@ object RecommendationSystem {
         $"books.Image-URL-M".as("Image-URL-M"),
         $"books.Image-URL-L".as("Image-URL-L")
       )
+
+    // Display joined dataframe schema and sample data
     jdf.printSchema()
     jdf.show(10)
 
-
-    // Split the data into training and test sets (for example, 80% training and 20% test)
+    // Split data into training and test sets
     val Array(trainingData, testData) = jdf.randomSplit(Array(0.8, 0.2))
 
-    // build recommendation model with als algorithm
+    // Build recommendation model with ALS algorithm
     val als = new ALS()
       .setMaxIter(15)
       .setRegParam(0.01)
@@ -102,9 +105,7 @@ object RecommendationSystem {
       .setRatingCol("rating")
     val alsModel = als.fit(trainingData)
 
-    // evaluate the als model
-    // compute root mean square error(rmse) with test data for evaluation
-    // set cold start strategy to 'drop' to ensure we don't get NaN evaluation metrics
+    // Evaluate the ALS model
     alsModel.setColdStartStrategy("drop")
     val predictions = alsModel.transform(testData)
 
@@ -115,23 +116,29 @@ object RecommendationSystem {
     val rmse = evaluator.evaluate(predictions)
     println(s"root mean square error $rmse")
 
-
+    // Define routes for HTTP server
     val route =
       pathPrefix("recommendations") {
         concat(
+          // Endpoint to fetch recommendations for a user
           path("user" / IntNumber) { userId =>
+
+            // Retrieve recommendations for a user using ALS model
             val userRecommendations = alsModel.recommendForUserSubset(Seq(userId).toDF("userId"), 10)
               .select($"userId", explode($"recommendations").as("rec"))
               .select($"userId", $"rec.ISBN".as("recommendedBook"))
 
+            // Join recommended books with book data to retrieve details
             val recommendedBooks = userRecommendations
               .join(bookDf, userRecommendations("recommendedBook") === bookDf("ISBN"))
               .select($"userId", $"recommendedBook", $"Book-Title", $"Book-Author", $"Year-Of-Publication", $"Publisher", $"Image-URL-S", $"Image-URL-M", $"Image-URL-L" )
               .limit(10)
               .collect()
 
+            // Define table headers for HTML output
             val tableHeaders = Seq("User ID", "Recommended Book", "Book-Title", "Book-Author", "Year-Of-Publication", "Publisher", "Image-URL-S", "Image-URL-M", "Image-URL-L")
 
+            // Create table rows with book details in HTML format
             val tableRows = recommendedBooks.map { row =>
               val rowData = Seq(
                 row.getAs[Int]("userId").toString,
@@ -148,6 +155,7 @@ object RecommendationSystem {
               s"<tr>${rowData.map(data => s"<td>$data</td>").mkString}</tr>"
             }.mkString
 
+            // HTML content to display recommended books in a table
             val htmlTable =
               s"""
                  |<html>
@@ -162,14 +170,19 @@ object RecommendationSystem {
                  |</html>
                  |""".stripMargin
 
+            // Return HTML response with recommended books table
             complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, htmlTable))
           },
           path("userchoice" / IntNumber) { userId =>
+
+            // Retrieve a user's highest rated books
             val userRatings = jdf.filter($"userId" === userId)
             val userHighestRatedBooks = userRatings.sort($"rating".desc).limit(10)
 
+            // Define table headers for HTML output
             val tableHeaders = Seq("User ID", "Recommended Book", "Book-Title", "Book-Author", "Year-Of-Publication", "Publisher", "Image-URL-S", "Image-URL-M", "Image-URL-L")
 
+            // Create table rows with user's highest rated books in HTML format
             val tableRows = userHighestRatedBooks.collect().map { row =>
               val rowData = Seq(
                 userId.toString,
@@ -185,6 +198,7 @@ object RecommendationSystem {
               s"<tr>${rowData.map(data => s"<td>$data</td>").mkString}</tr>"
             }.mkString
 
+            // HTML content to display user's highest rated books in a table
             val htmlTable =
               s"""
                  |<html>
@@ -198,20 +212,24 @@ object RecommendationSystem {
                  |</body>
                  |</html>
                  |""".stripMargin
-
+            // Return HTML response with user's highest rated books table
             complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, htmlTable))
           }
         )
       }
 
-
+    // Bind the defined routes to the specified host and port
     val bindingFuture = Http().bindAndHandle(route, "localhost", 8080)
 
+    // Print a message indicating the server is online and how to stop it
         println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
+
+    // Wait for user input to stop the server (keep it running until user input)
         scala.io.StdIn.readLine() // Let the server run until user presses return
+    // Unbind the server to stop listening to incoming connections
         bindingFuture
           .flatMap(_.unbind())
-          .onComplete(_ => system.terminate())
+          .onComplete(_ => system.terminate()) // Terminate the ActorSystem and associated resources
 
         // Stop the SparkSession
         spark.stop()
